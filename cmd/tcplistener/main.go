@@ -2,46 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
+	req "httfromtcp/internal/request"
 	"log"
 	"net"
-	"os"
 )
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	linesChannel := make(chan string)
-
-	go func() {
-		bytesLine := []byte{}
-		for {
-			bytes := make([]byte, 8)
-			n, err := f.Read(bytes)
-			if err == io.EOF {
-				linesChannel <- string(bytesLine)
-				break
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			if n == 0 {
-				os.Exit(0)
-			}
-			data := bytes[:n]
-			for _, v := range data {
-				if string(v) != "\n" {
-					bytesLine = append(bytesLine, v)
-				}
-				if string(v) == "\n" {
-					linesChannel <- string(bytesLine)
-					bytesLine = []byte{}
-				}
-			}
-		}
-		defer close(linesChannel)
-	}()
-
-	return linesChannel
-}
 
 func main() {
 
@@ -57,11 +21,20 @@ func main() {
 			log.Fatal(err)
 		}
 
-		lines := getLinesChannel(conn)
-
-		for line := range lines {
-			fmt.Printf("read: %s\n", line)
+		request, err := req.RequestFromReader(conn)
+		if err != nil {
+			log.Fatal(err)
 		}
-	}
 
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %s\n", request.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", request.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", request.RequestLine.HttpVersion)
+		fmt.Println("Headers:")
+		request.Headers.ForEach(func(k, v string) {
+			fmt.Printf("- %s: %s\n", k, v)
+		})
+		fmt.Println("Body:")
+		fmt.Println(string(request.Body))
+	}
 }
